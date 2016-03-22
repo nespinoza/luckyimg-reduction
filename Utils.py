@@ -63,7 +63,7 @@ def guess_gaussian_parameters(d):
     # (Under) estimate amplitude assuming a gaussian function:
     A = (np.sum(d-np.median(d))/(2.*np.pi*sigma**2))
 
-    return x0,y0,sigma,A
+    return x0,y0,sigma,2.*A
 
 def moffat(x,y,A,x0,y0,sigma,beta):
     first_term = ((x-x0)**2 + (y-y0)**2)/sigma**2
@@ -81,6 +81,16 @@ def gaussian(x, y, A, x0, y0, sigma):
     return A*np.exp(-a)
 
 import lmfit
+
+def modelPSF(params,mesh):
+    W = params['W'].value
+    ag = (1.-W)*assymetric_gaussian(mesh[0],mesh[1],params['Ag'].value,params['x0'].value,\
+                        params['y0'].value,params['sigma_x'].value,params['sigma_y'].value,\
+                        params['theta'].value)
+    mof = W*moffat(mesh[0],mesh[1],params['Am'].value,params['x0'].value,\
+                        params['y0'].value,params['sigma_m'].value,params['beta'].value)
+    return ag+mof+params['bkg'].value
+
 def fitPSF(d,x0,y0,sigma,A):
     """
     This function fits a sum of a rotated gaussian plus a 
@@ -88,15 +98,9 @@ def fitPSF(d,x0,y0,sigma,A):
     """
     mesh = np.meshgrid(np.arange(d.shape[0]),np.arange(d.shape[1]))
     flattened_d = d.flatten()
-    def residuals(params):
-        W = params['W'].value
-        ag = (1.-W)*assymetric_gaussian(mesh[0],mesh[1],params['Ag'].value,params['x0'].value,\
-                        params['y0'].value,params['sigma_x'].value,params['sigma_y'].value,\
-                        params['theta'].value)
-        mof = W*moffat(mesh[0],mesh[1],params['Am'].value,params['x0'].value,\
-                        params['y0'].value,params['sigma_m'].value,params['beta'].value)
 
-        return flattened_d - (ag+mof+params['bkg'].value).flatten()
+    def residuals(params):
+        return flattened_d - (modelPSF(params,mesh)).flatten()
 
     prms = lmfit.Parameters()
     prms.add('x0', value = x0, min = 0, max = d.shape[0], vary = True)
