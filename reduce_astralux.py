@@ -8,8 +8,12 @@ import Utils
 #################### USER DEFINITIONS #######################
 data_folder = '/Volumes/SeagateEHD/data/AstraLux/22122015/'
 filename = 'TDRIZZLE_0010_029_HATS606007_SDSSz__000.fits'
-scale = 23*1e-3 # arcsecs/pixel
-N = 5 # size of the box to perform the contrast profiles
+# Scale of the image in arcsecs/pixel:
+scale = 23*1e-3 
+# Size of the box that will be used at each point to estimate 
+# the noise. Also is the radius of the circle used to get the 
+# photometry at that point:
+N = 5 
 #############################################################
 
 # Create output directory if non-existent for the current image:
@@ -42,6 +46,8 @@ if not os.path.exists(out_dir+'/model_image.fits'):
 
     # Generate residual image:
     res = model - d
+
+    # Save images:
     pyfits.PrimaryHDU(model).writeto(out_dir+'/model_image.fits')
     pyfits.PrimaryHDU(d).writeto(out_dir+'/original_image.fits')
     pyfits.PrimaryHDU(res).writeto(out_dir+'/residual_image.fits')
@@ -74,10 +80,10 @@ flux_target,error_target = Utils.getApertureFluxes(d,x0,y0,N,0.0,1.0)
 
 # Generate the contrast curve by, at each radius, extracting 
 # photometry at 30 angles around an N-pixel radius of the 
-# original image, estimate the noise of the pixels with the 
-# residual image, and summing 5 times that noise to the 
-# image. Then, compare the flux at the center with the flux 
-# at that point.
+# original image. The noise of the pixels is estimated with the 
+# residual image, and the 5-sigma flux at that position is obtained 
+# as the flux + 5sigma. Then, compare the total flux at the center 
+# with the total (5-sigma) flux at that point.
 
 # First, define the radii that will be explored:
 radii = np.arange(0,max_radius,5)
@@ -102,12 +108,12 @@ for i in range(len(radii)):
         c_subimg = res[c_x-(N/2)-1:c_x+(N/2),\
                        c_y-(N/2)-1:c_y+(N/2)]
 
-        # Estimate the standard-deviation of the pixels
+        # Estimate the (empirical) standard-deviation of the pixels
         # in the box:
         sigma = np.sqrt(np.var(c_subimg))
 
-        # Extract photometry around the current center in a NxN box by adding 5-times 
-        # the noise:
+        # Extract the total (5-sigma) flux around the current center 
+        # in a N pixel radius:
         flux_obj,error_obj = Utils.getApertureFluxes(d+5.*sigma,c_x,c_y,N,0.0,1.0)
 
         # Get the magnitude contrast between the flux of the 
@@ -137,6 +143,6 @@ fout.close()
 import matplotlib.pyplot as plt
 plt.style.use('ggplot')
 plt.errorbar(radii,contrasts,yerr=contrasts_err)
-xlabel('Radius (arcsec)')
-ylabel('Delta mag')
+plt.xlabel('Radius (arcsec)')
+plt.ylabel('Delta mag')
 show()
