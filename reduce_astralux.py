@@ -54,7 +54,11 @@ else:
     out_params = pickle.load(par)
     par.close()
 
+# Get centroids:
 x0,y0 = out_params['x0'].value,out_params['y0'].value
+
+# Remove estimated background: 
+d = d - out_params['bkg']
 
 # Now generate 5-sigma contrast curves. For this, first find 
 # closest distance to edges of the image:
@@ -64,28 +68,36 @@ up_dist = int(np.floor((y0 - d.shape[1])**2 ))
 down_dist = int(np.ceil(y0))
 max_radius = np.min([right_dist,left_dist,up_dist,down_dist])
 
-# Generate N-pixel subimg around the center of the original image:
-original_subimg = d[int(x0)-(N/2)-1:int(x0)+(N/2),\
-                    int(y0)-(N/2)-1:int(y0)+(N/2)]
+# And extract photometry around an N pixel radius around the center 
+# (i.e., the target star):
+flux_target,error_target = Utils.getApertureFluxes(d,x0,y0,N,0.0,1.0)
 
-# Get the total flux in this box:
-stellar_flux = np.sum(original_subimg)
+# Generate the contrast curve by, at each radius, extracting 
+# photometry at 30 angles around an N-pixel radius of the 
+# original image, estimate the noise of the pixels with the 
+# residual image, and summing 5 times that noise to the 
+# image. Then, compare the flux at the center with the flux 
+# at that point.
 
-# Generate the contrast curve by, at each radius, generating 30 
-# NxN subimg (one at each of the 30 sampled angles around the 
-# estimated centroid of the image) using the residual from the 
-# model fit, and comparing it with the original_subimg above, 
-# generated with the original image:
-radii = np.arange(1,max_radius)
+# First, define the radii that will be explored:
+radii = np.arange(0,max_radius,5)
+
+# Initialize arrays that will save the contrast curve:
 contrasts = np.zeros(len(radii))
 contrasts_err = np.zeros(len(radii))
+
+# Initialize the angles:
 thetas = np.linspace(0,2*np.pi,30)
 for i in range(len(radii)):
+    # Generate vector that saves the contrast at a given 
+    # angle:
     c_contrasts = np.zeros(len(thetas))
     for j in range (len(thetas)):
-        # Get current pixel to use as center:    
+        # Get current pixel to use as center around which we will
+        # extract the photometry:
         c_x = x0 + int(radii[i]*np.cos(thetas[j]))
         c_y = y0 + int(radii[i]*np.sin(thetas[j]))
+
         # Get NxN sub-image at the current pixel:
         c_subimg = res[c_x-(N/2)-1:c_x+(N/2),\
                        c_y-(N/2)-1:c_y+(N/2)]
@@ -94,12 +106,22 @@ for i in range(len(radii)):
         # in the box:
         sigma = np.sqrt(np.var(c_subimg))
 
+        # Extract photometry around the current center in a NxN box by adding 5-times 
+        # the noise:
+        flux_obj,error_obj = Utils.getApertureFluxes(d+5.*sigma,c_x,c_y,N,0.0,1.0)
+
         # Get the magnitude contrast between the flux of the 
-        # star and 5-sigma the measured standard-deviation. This 
-        # defines our 5-sigma contrast at this pixel:
-        c_contrasts[j] = -2.51*np.log10(stellar_flux/(5.*sigma))
-    contrasts[i] = np.median(c_contrasts)
-    contrasts_err[i] = np.sqrt(np.var(c_contrasts))
+        # star and flux at current position + 5-sigma the measured 
+        # standard-deviation. This defines our 5-sigma contrast at this 
+        # radius/angle:
+        c_contrasts[j] = -2.51*np.log10(flux_target/flux_obj)
+
+    # Take out nans:
+    idx = np.where(~np.isnan(c_contrasts))[0]
+    # Get contrasts as the median of all the contrasts at all angles;
+    # estimate errors empirically from this distribution:
+    contrasts[i] = np.median(c_contrasts[idx])
+    contrasts_err[i] = np.sqrt(np.var(c_contrasts[idx]))
 
 # Convert radii in pixels to arseconds:
 radii = radii*scale
@@ -107,9 +129,14 @@ radii = radii*scale
 # Save results:
 fout = open(out_dir+'/contrast_curve_'+filename+'.dat','w')
 fout.write('# Radius ('') \t Delta mag \t Error on Delta Mag\n')
-print len(contrasts_err),len(radii)
 for i in range(len(radii)):
-    print len(contrasts_err)
-    print i,radii[i],contrasts[i],contrasts_err[i]
     fout.write('{0: 3.3f} \t {1: 3.3f} \t {2: 3.3f} \n'.format(radii[i],contrasts[i],contrasts_err[i]))
 fout.close()
+
+# Plot final results to the user
+import matplotlib.pyplot as plt
+plt.style.use('ggplot')
+plt.errorbar(radii,contrasts,yerr=contrasts_err)
+xlabel('Radius (arcsec)')
+ylabel('Delta mag')
+show()
