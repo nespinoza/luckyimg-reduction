@@ -7,7 +7,7 @@ import Utils
 
 #################### USER DEFINITIONS #######################
 data_folder = '/Volumes/SeagateEHD/data/AstraLux/22122015/'
-filename = 'TDRIZZLE_0010_029_HATS606007_SDSSz__000.fits'
+filename = 'TDRIZZLE_0010_006_HATS754005_SDSSz__000.fits'
 # Scale of the image in arcsecs/pixel:
 scale = 23*1e-3 
 # Size of the box that will be used at each point to estimate 
@@ -68,10 +68,10 @@ d = d - out_params['bkg']
 
 # Now generate 5-sigma contrast curves. For this, first find 
 # closest distance to edges of the image:
-right_dist = int(np.floor((x0 - d.shape[0])**2 ))
-left_dist = int(np.ceil(x0))
-up_dist = int(np.floor((y0 - d.shape[1])**2 ))
-down_dist = int(np.ceil(y0))
+right_dist = int(np.floor(np.abs(x0 - d.shape[0])))-N
+left_dist = int(np.ceil(x0))-N
+up_dist = int(np.floor(np.abs(y0 - d.shape[1])))-N
+down_dist = int(np.ceil(y0))-N
 max_radius = np.min([right_dist,left_dist,up_dist,down_dist])
 
 # And extract photometry around an N pixel radius around the center 
