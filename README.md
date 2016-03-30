@@ -9,12 +9,13 @@ contrast curves around the brightest star on the image
 The full method is explained in Espinoza et al. (2016b), 
 but the steps are:
 
-    1. Model the brightest star as a rotated, assymetric 
-       gaussian.
+    1. Model the brightest star as a weighted sum of a 
+       rotated, assymetric gaussian and a Moffat profile.
 
     2. Generate a residual image between this model and the 
        original image which will be used to estimate the 
-       noise at each pixel.
+       noise at each pixel (in order to include systematic and 
+       statistical uncertainties).
 
     3. With this noise estimation, extract photometry at the 
        center and at different radii in a N pixel radius and 
