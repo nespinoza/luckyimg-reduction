@@ -120,7 +120,7 @@ for i in range(len(radii)):
         # star and flux at current position + 5-sigma the measured 
         # standard-deviation. This defines our 5-sigma contrast at this 
         # radius/angle:
-        c_contrasts[j] = -2.51*np.log10(flux_target/flux_obj)
+        c_contrasts[j] = -2.51*np.log10(flux_obj/flux_target)
 
     # Take out nans:
     idx = np.where(~np.isnan(c_contrasts))[0]
