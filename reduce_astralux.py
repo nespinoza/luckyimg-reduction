@@ -11,9 +11,10 @@ filename = 'TDRIZZLE_0010_006_HATS754005_SDSSz__000'
 # Scale of the image in arcsecs/pixel:
 scale = 23*1e-3 
 # Size of the box that will be used at each point to estimate 
-# the noise. Also is the radius of the circle used to get the 
-# photometry at that point:
-N = 5 
+# the noise. 
+n = 5
+# Radius of the circle used to get the photometry at that point:
+R = 5 
 #############################################################
 
 # Create output directory if non-existent for the current image:
@@ -64,10 +65,11 @@ else:
 x0,y0 = out_params['x0'].value,out_params['y0'].value
 
 # Remove estimated background: 
-d = d - out_params['bkg']
+d = d - out_params['bkg'].value
 
 # Now generate 5-sigma contrast curves. For this, first find 
 # closest distance to edges of the image:
+N = np.max([n,R])
 right_dist = int(np.floor(np.abs(x0 - d.shape[0])))-N
 left_dist = int(np.ceil(x0))-N
 up_dist = int(np.floor(np.abs(y0 - d.shape[1])))-N
@@ -76,7 +78,7 @@ max_radius = np.min([right_dist,left_dist,up_dist,down_dist])
 
 # And extract photometry around an N pixel radius around the center 
 # (i.e., the target star):
-flux_target,error_target = Utils.getApertureFluxes(d,x0,y0,N,0.0,1.0)
+flux_target,error_target = Utils.getApertureFluxes(d,x0,y0,R,0.0,1.0)
 
 # Generate the contrast curve by first generating the Threshold Function.
 # This is generated at each radius by extracting 
@@ -100,22 +102,27 @@ contrast_err = np.zeros(len(radii))
 # Initialize magnitude contrasts to be explored:
 possible_contrasts = np.linspace(0,10,100)
 
-# Initialize the angles:
-thetas = np.linspace(0,2*np.pi,27)
 for i in range(len(radii)):
-    print i,'of',len(radii),'(',radii[i],')'
+    # Define the number of angles that, given the radius, have 
+    # independant information:
+    if radii[i] != 0:
+        n_thetas = np.min([int((2.*np.pi)/((2.*N)/radii[i])),30])
+        thetas = np.linspace(0,2*np.pi,n_thetas)
+        #print n_thetas,' angles with independant info at',radii[i]
+    else:
+        thetas = [0.]
     # Generate vector that saves the threshold functions 
     # at a given angle:
     c_T = np.zeros(len(thetas))
     for j in range (len(thetas)):
         # Get current pixel to use as center around which we will
         # extract the photometry:
-        c_x = x0 + int(radii[i]*np.cos(thetas[j]))
-        c_y = y0 + int(radii[i]*np.sin(thetas[j]))
+        c_x = x0 + int(np.round(radii[i]*np.cos(thetas[j])))
+        c_y = y0 + int(np.round(radii[i]*np.sin(thetas[j])))
 
         # Get nxn sub-image at the current pixel:
-        c_subimg = res[c_x-(N/2)-1:c_x+(N/2),\
-                       c_y-(N/2)-1:c_y+(N/2)]
+        c_subimg = res[c_y-(n/2)-1:c_y+(n/2),\
+                       c_x-(n/2)-1:c_x+(n/2)]
 
         # Estimate the (empirical) standard-deviation of the pixels
         # in the box:
@@ -123,7 +130,7 @@ for i in range(len(radii)):
 
         # Extract the total (5-sigma) flux around the current center 
         # in a N pixel radius:
-        flux_obj,error_obj = Utils.getApertureFluxes(d+5.*sigma,c_x,c_y,N,0.0,1.0)
+        flux_obj,error_obj = Utils.getApertureFluxes(d+5.*sigma,c_x,c_y,R,0.0,1.0)
 
         # Get the flux ratio between the flux of the 
         # star and flux at current position + 5-sigma the measured 
@@ -154,13 +161,14 @@ for i in range(len(radii)):
         # different contrasts:
         fake_signal = Utils.modelPSF(out_params,\
                       np.meshgrid(np.arange(d.shape[0]),np.arange(d.shape[1])))
+
         for k in range(len(possible_contrasts)):
             # Generate the scaling factor:
             scaling_factor = 10**(possible_contrasts[k]/2.51)
             # Construct fake image:
             fake_image = d + (fake_signal/scaling_factor)
             # Extract aperture photometry:
-            flux_obj,error_obj = Utils.getApertureFluxes(fake_image,c_x,c_y,N,0.0,1.0)
+            flux_obj,error_obj = Utils.getApertureFluxes(fake_image,c_x,c_y,R,0.0,1.0)
             # If the contrast of the fake image is lower than the threshold limit, then 
             # the contrast before this one was the detection limit. Save it, break out of 
             # this loop, and go for the next position (next angle):
@@ -170,7 +178,7 @@ for i in range(len(radii)):
                 else:
                     c_contrast[j] = 0.0
                 break
-    idx = np.where(~np.isnan(c_contrast))[0]
+    idx = np.where((~np.isnan(c_contrast))&(c_contrast!=0.0))[0]
     contrast[i] = np.median(c_contrast[idx])
     contrast_err[i] = np.sqrt(np.var(c_contrast[idx])*len(idx)/np.double(len(idx)-1.))
 
