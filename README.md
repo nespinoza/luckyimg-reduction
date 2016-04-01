@@ -20,12 +20,18 @@ but the steps are:
     3. With this noise estimation, extract photometry at the 
        center and at different radii in a N pixel radius and 
        use the flux at the center and the flux at each radii 
-       plus 5-sigma in order to generate the contrast curve.
+       plus 5-sigma in order to generate a threshold function, 
+       which will aid in defining the flux ratio at which one 
+       considers a detection.
 
-The code performs the modelling, and generates a contrast curve 
-at the end. So far, it supports lucky imaging observations done 
-with AstraLux Sur, but it should be easy to port it to other 
-instruments.
+    4. Inject fake signals and recover them using the threshold 
+       function. The largest contrast at which one can consider 
+       a detection is the 5-sigma contrast limit.
+
+The code performs the modelling, and generates the threshold 
+function and contrast curve at the end. So far, it supports 
+lucky imaging observations done with AstraLux Sur, but it should 
+be easy to port it to other instruments.
 
 Dependencies
 ------------
