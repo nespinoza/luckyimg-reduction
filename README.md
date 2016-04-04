@@ -6,8 +6,7 @@ This code takes lucky imaging observations and generates
 contrast curves around the brightest star on the image 
 (useful for exoplanet studies).
 
-The full method is explained in Espinoza et al. (2016b), 
-but the steps are:
+The steps are:
 
     1. Model the brightest star as a weighted sum of a 
        rotated, assymetric gaussian and a Moffat profile.
