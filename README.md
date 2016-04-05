@@ -12,25 +12,23 @@ The steps are:
        rotated, assymetric gaussian and a Moffat profile.
 
     2. Generate a residual image between this model and the 
-       original image which will be used to estimate the 
-       noise at each pixel (in order to include systematic and 
-       statistical uncertainties).
+       original image.
 
-    3. With this noise estimation, extract photometry at the 
-       center and at different radii in a N pixel radius and 
-       use the flux at the center and the flux at each radii 
-       plus 5-sigma in order to generate a threshold function, 
-       which will aid in defining the flux ratio at which one 
-       considers a detection.
+    3. Use this image by, at each position r and angle theta 
+       in the image, estimate on a nxn box the noise (sigma). 
 
-    4. Inject fake signals and recover them using the threshold 
-       function. The largest contrast at which one can consider 
-       a detection is the 5-sigma contrast limit.
+    4. Inject sources with the same but scaled (i.e., with different 
+       magnitudes) PSFs at each position. Detect them by trying to detect 
+       5 pixels above 5-sigma. The magnitude at which we start getting 4 or 
+       less pixels above 5-sigma defines our contrast at that position and  
+       angle.
 
-The code performs the modelling, and generates the threshold 
-function and contrast curve at the end. So far, it supports 
-lucky imaging observations done with AstraLux Sur, but it should 
-be easy to port it to other instruments.
+    5. For each radius, average all the contrasts in the angles. This 
+       defines our contrast curve.
+
+The code performs the modelling, and generates the contrast curves at 
+the end. So far, it supports lucky imaging observations done with AstraLux Sur, 
+but it should be easy to port it to other instruments.
 
 Dependencies
 ------------

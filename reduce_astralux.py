@@ -6,15 +6,18 @@ import pickle
 import Utils
 
 #################### USER DEFINITIONS #######################
+
 data_folder = '/Volumes/SeagateEHD/data/AstraLux/22122015/'
 filename = 'TDRIZZLE_0010_006_HATS754005_SDSSz__000'
+# Minimum magnitude contrast to be explored:
+min_m = 0
+# Maximum magnitude contrast to be explored:
+max_m = 10
+# Contrast steps:
+contrast_steps = 100
 # Scale of the image in arcsecs/pixel:
 scale = 23*1e-3 
-# Size of the box that will be used at each point to estimate 
-# the noise. 
-n = 5
-# Radius of the circle used to get the photometry at that point:
-R = 5 
+
 #############################################################
 
 # Create output directory if non-existent for the current image:
@@ -61,46 +64,60 @@ else:
     out_params = pickle.load(par)
     par.close()
 
+# Define the step in radius at which we will calculate the contrasts. This is 
+# the geometric mean of sigma_x and sigma_y. The aperture radius and the box 
+# at which we estimate the noise at each radius is half this value:
+sigma = np.sqrt(out_params['sigma_x'].value*out_params['sigma_y'].value)
+radii_step = sigma
+R = radii_step/2.
+n = int(radii_step/2.)
+
+# Convert the radius step to int:
+radii_step = int(radii_step)
+
 # Get centroids:
 x0,y0 = out_params['x0'].value,out_params['y0'].value
 
-# Remove estimated background: 
+# Remove estimated background from original image: 
 d = d - out_params['bkg'].value
+
+# Get maximum between n and R:
+N = np.max([n,R])
 
 # Now generate 5-sigma contrast curves. For this, first find 
 # closest distance to edges of the image:
-N = np.max([n,R])
 right_dist = int(np.floor(np.abs(x0 - d.shape[0])))-N
 left_dist = int(np.ceil(x0))-N
 up_dist = int(np.floor(np.abs(y0 - d.shape[1])))-N
 down_dist = int(np.ceil(y0))-N
 max_radius = np.min([right_dist,left_dist,up_dist,down_dist])
 
-# And extract photometry around an N pixel radius around the center 
-# (i.e., the target star):
-flux_target,error_target = Utils.getApertureFluxes(d,x0,y0,R,0.0,1.0)
+# Generate the contrast curve by, for a given radius and using the 
+# residual image, injecting fake sources with the same parameters as
+# the fitted PSF but scaled in order to see at what scale (i.e., magnitude)
+# we detect the injected signal at 5-sigma). A detection is defined if 
+# more than 5 pixels are above the 5-sigma noise level of this residual 
+# image at that position.
 
-# Generate the contrast curve by first generating the Threshold Function.
-# This is generated at each radius by extracting 
-# photometry at 30 angles around an n-pixel radius of the 
-# original image. The noise of the pixels is estimated with the 
-# residual image, and the 5-sigma flux at that position is obtained 
-# as the flux + 5sigma. Then, compare the total flux at the center 
-# with the total (5-sigma) flux at that point.
+print '\t Important parameters derived:'
+print '\t'
+print '\t sigma_x (arcsec):',out_params['sigma_x']*scale,'(',out_params['sigma_x'],'pixels)'
+print '\t sigma_y (arcsec):',out_params['sigma_y']*scale,'(',out_params['sigma_y'],'pixels)'
+print '\t Step radius (arcsec):',radii_step*scale,'(',radii_step,' pixels)'
 
 # First, define the radii that will be explored:
-radii = np.arange(0,max_radius,10)
-
-# Initialize arrays that will save the threshold functions:
-T = np.zeros(len(radii))
-T_err = np.zeros(len(radii))
+radii = np.arange(radii_step,max_radius,radii_step)
 
 # Initialize arrays that will save the contrast curves:
 contrast = np.zeros(len(radii))
 contrast_err = np.zeros(len(radii))
 
 # Initialize magnitude contrasts to be explored:
-possible_contrasts = np.linspace(0,10,100)
+possible_contrasts = np.linspace(min_m,max_m,contrast_steps)
+
+# Now inject fake source on the images at each position, and see when we 
+# recover it. First, set background of the model to zero:
+out_params['bkg'].value = 0.0
 
 for i in range(len(radii)):
     # Define the number of angles that, given the radius, have 
@@ -108,12 +125,9 @@ for i in range(len(radii)):
     if radii[i] != 0:
         n_thetas = np.min([int((2.*np.pi)/((2.*N)/radii[i])),30])
         thetas = np.linspace(0,2*np.pi,n_thetas)
-        #print n_thetas,' angles with independant info at',radii[i]
-    else:
-        thetas = [0.]
     # Generate vector that saves the threshold functions 
     # at a given angle:
-    c_T = np.zeros(len(thetas))
+    c_contrast = np.zeros(len(thetas))
     for j in range (len(thetas)):
         # Get current pixel to use as center around which we will
         # extract the photometry:
@@ -128,35 +142,10 @@ for i in range(len(radii)):
         # in the box:
         sigma = np.sqrt(np.var(c_subimg))
 
-        # Extract the total (5-sigma) flux around the current center 
-        # in a N pixel radius:
-        flux_obj,error_obj = Utils.getApertureFluxes(d+5.*sigma,c_x,c_y,R,0.0,1.0)
-
-        # Get the flux ratio between the flux of the 
-        # star and flux at current position + 5-sigma the measured 
-        # standard-deviation. This defines our threshold function:
-        c_T[j] = flux_obj/flux_target
-
-    # Take out nans:
-    idx = np.where(~np.isnan(c_T))[0]
-    # Get threshold functions as the median of all the thresholds at all angles;
-    # estimate errors empirically from this distribution:
-    T[i] = np.median(c_T[idx])
-    T_err[i] = np.sqrt(np.var(c_T[idx])*(len(idx))/np.double(len(idx)-1.))
-
-    # Now inject fake source on the images at each position, and see when we 
-    # recover it. First, set background of the model to zero:
-    out_params['bkg'].value = 0.0
-    
-    # Initialize the array that will save the contrasts at all angles:
-    c_contrast = np.zeros(len(thetas))
-    for j in range(len(thetas)):
-        # Get current position:    
-        c_x = x0 + int(radii[i]*np.cos(thetas[j]))
-        c_y = y0 + int(radii[i]*np.sin(thetas[j]))
         # Set the model PSF at the center of the current position:
         out_params['x0'].value = c_x
         out_params['y0'].value = c_y
+
         # Generate the fake source. We will scale it below to match 
         # different contrasts:
         fake_signal = Utils.modelPSF(out_params,\
@@ -165,19 +154,19 @@ for i in range(len(radii)):
         for k in range(len(possible_contrasts)):
             # Generate the scaling factor:
             scaling_factor = 10**(possible_contrasts[k]/2.51)
-            # Construct fake image:
-            fake_image = d + (fake_signal/scaling_factor)
-            # Extract aperture photometry:
-            flux_obj,error_obj = Utils.getApertureFluxes(fake_image,c_x,c_y,R,0.0,1.0)
-            # If the contrast of the fake image is lower than the threshold limit, then 
-            # the contrast before this one was the detection limit. Save it, break out of 
-            # this loop, and go for the next position (next angle):
-            if (flux_obj/flux_target < T[i]):
+            # Construct fake image on top of the residual image, cut the portion under
+            # analysis:
+            fake_image = (res + (fake_signal/scaling_factor))[c_y-(n/2)-1:c_y+(n/2),\
+                                                              c_x-(n/2)-1:c_x+(n/2)]
+            # If our detection limit (i.e., 5 pixels or more are above 5-sigma) is not accomplished,
+            # then the source cannot be detected and this defines our 5-sigma contrast:
+            if (len(np.where(fake_image>5*sigma)[0])<5):
                 if k != 0:
                     c_contrast[j] = possible_contrasts[k-1]      
                 else:
                     c_contrast[j] = 0.0
                 break
+
     idx = np.where((~np.isnan(c_contrast))&(c_contrast!=0.0))[0]
     contrast[i] = np.median(c_contrast[idx])
     contrast_err[i] = np.sqrt(np.var(c_contrast[idx])*len(idx)/np.double(len(idx)-1.))
@@ -186,31 +175,18 @@ for i in range(len(radii)):
 radii = radii*scale
 
 # Save results:
-fout = open(out_dir+'/threshold_function_'+filename+'.dat','w')
-fout.write('# Radius ('') \t T_5s(Radius) \t Error\n')
-for i in range(len(radii)):
-    fout.write('{0: 3.3f} \t {1: 3.3f} \t {2: 3.3f} \n'.format(radii[i],T[i],T_err[i]))
-fout.close()
-
-# Save results:
-fout = open(out_dir+'/contrast_curve_'+filename+'.dat','w')
-fout.write('# Radius ('') \t Magnitude Contrast \t Error\n')
-for i in range(len(radii)):
-            fout.write('{0: 3.3f} \t {1: 3.3f} \t {2: 3.3f} \n'.format(radii[i],\
-                                                    contrast[i],contrast_err[i]))
-fout.close()
+#fout = open(out_dir+'/contrast_curve_'+filename+'.dat','w')
+#fout.write('# Radius ('') \t Magnitude Contrast \t Error\n')
+#for i in range(len(radii)):
+#            fout.write('{0: 3.3f} \t {1: 3.3f} \t {2: 3.3f} \n'.format(radii[i],\
+#                                                    contrast[i],contrast_err[i]))
+#fout.close()
 
 # Plot final results to the user
 import matplotlib.pyplot as plt
-plt.style.use('ggplot')
-plt.errorbar(radii,T,yerr=T_err)
-plt.title('Threshold function')
-plt.xlabel(r'$r$ (arcsec)')
-plt.ylabel(r'$T_{5\sigma}(r)$')
-plt.show()
-
 plt.errorbar(radii,contrast,yerr=contrast_err)
 plt.title('Magnitude contrast')
 plt.xlabel(r'$r$ (arcsec)')
 plt.ylabel(r'$\Delta m$')
+plt.gca().invert_yaxis()
 plt.show()
