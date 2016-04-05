@@ -19,7 +19,10 @@ contrast_steps = 100
 scale = 23*1e-3 
 
 #############################################################
-
+print '\n\t     AstraLux contrast curve generator'
+print '\t-----------------------------------------------'
+print '\tAuthors: Nestor Espinoza (nespino@astro.puc.cl)'
+print '\t         Andres Jordan (ajordan@astro.puc.cl)\n'
 # Create output directory if non-existent for the current image:
 out_dir = filename.split('.')[0]
 if not os.path.exists(out_dir):
@@ -28,6 +31,7 @@ if not os.path.exists(out_dir):
 # If not already done, model the input image. If already done, 
 # obtain saved data:
 if not os.path.exists(out_dir+'/model_image.fits'):
+    print '\t > Modelling the PSF...'
     # First, extract image data:
     d,h = pyfits.getdata(data_folder+filename, header=True)
 
@@ -52,10 +56,12 @@ if not os.path.exists(out_dir+'/model_image.fits'):
     res = model - d
 
     # Save images:
+    print '\t > Saving results...'
     pyfits.PrimaryHDU(model).writeto(out_dir+'/model_image.fits')
     pyfits.PrimaryHDU(d).writeto(out_dir+'/original_image.fits')
     pyfits.PrimaryHDU(res).writeto(out_dir+'/residual_image.fits')
 else:
+    print '\t > PSF already modelled. Extracting data...'
     # If everything already done, read data:
     model = pyfits.getdata(out_dir+'/model_image.fits')
     d = pyfits.getdata(out_dir+'/original_image.fits')
@@ -67,10 +73,9 @@ else:
 # Define the step in radius at which we will calculate the contrasts. This is 
 # the geometric mean of sigma_x and sigma_y. The aperture radius and the box 
 # at which we estimate the noise at each radius is half this value:
-sigma = np.sqrt(out_params['sigma_x'].value*out_params['sigma_y'].value)
+sigma = (out_params['sigma_x'].value+out_params['sigma_y'].value)/2.
 radii_step = sigma
-R = radii_step/2.
-n = int(radii_step/2.)
+N = int(radii_step/2.)
 
 # Convert the radius step to int:
 radii_step = int(radii_step)
@@ -80,9 +85,6 @@ x0,y0 = out_params['x0'].value,out_params['y0'].value
 
 # Remove estimated background from original image: 
 d = d - out_params['bkg'].value
-
-# Get maximum between n and R:
-N = np.max([n,R])
 
 # Now generate 5-sigma contrast curves. For this, first find 
 # closest distance to edges of the image:
@@ -99,10 +101,10 @@ max_radius = np.min([right_dist,left_dist,up_dist,down_dist])
 # more than 5 pixels are above the 5-sigma noise level of this residual 
 # image at that position.
 
-print '\t Important parameters derived:'
+print '\t > Important parameters derived:'
 print '\t'
-print '\t sigma_x (arcsec):',out_params['sigma_x']*scale,'(',out_params['sigma_x'],'pixels)'
-print '\t sigma_y (arcsec):',out_params['sigma_y']*scale,'(',out_params['sigma_y'],'pixels)'
+print '\t sigma_x (arcsec):',out_params['sigma_x'].value*scale,'(',out_params['sigma_x'].value,'pixels)'
+print '\t sigma_y (arcsec):',out_params['sigma_y'].value*scale,'(',out_params['sigma_y'].value,'pixels)'
 print '\t Step radius (arcsec):',radii_step*scale,'(',radii_step,' pixels)'
 
 # First, define the radii that will be explored:
@@ -119,6 +121,7 @@ possible_contrasts = np.linspace(min_m,max_m,contrast_steps)
 # recover it. First, set background of the model to zero:
 out_params['bkg'].value = 0.0
 
+print '\t > Generating contrast curves...'
 for i in range(len(radii)):
     # Define the number of angles that, given the radius, have 
     # independant information:
@@ -135,8 +138,8 @@ for i in range(len(radii)):
         c_y = y0 + int(np.round(radii[i]*np.sin(thetas[j])))
 
         # Get nxn sub-image at the current pixel:
-        c_subimg = res[c_y-(n/2)-1:c_y+(n/2),\
-                       c_x-(n/2)-1:c_x+(n/2)]
+        c_subimg = res[c_y-(N/2)-1:c_y+(N/2),\
+                       c_x-(N/2)-1:c_x+(N/2)]
 
         # Estimate the (empirical) standard-deviation of the pixels
         # in the box:
@@ -156,8 +159,8 @@ for i in range(len(radii)):
             scaling_factor = 10**(possible_contrasts[k]/2.51)
             # Construct fake image on top of the residual image, cut the portion under
             # analysis:
-            fake_image = (res + (fake_signal/scaling_factor))[c_y-(n/2)-1:c_y+(n/2),\
-                                                              c_x-(n/2)-1:c_x+(n/2)]
+            fake_image = (res + (fake_signal/scaling_factor))[c_y-(N/2)-1:c_y+(N/2),\
+                                                              c_x-(N/2)-1:c_x+(N/2)]
             # If our detection limit (i.e., 5 pixels or more are above 5-sigma) is not accomplished,
             # then the source cannot be detected and this defines our 5-sigma contrast:
             if (len(np.where(fake_image>5*sigma)[0])<5):
@@ -175,12 +178,12 @@ for i in range(len(radii)):
 radii = radii*scale
 
 # Save results:
-#fout = open(out_dir+'/contrast_curve_'+filename+'.dat','w')
-#fout.write('# Radius ('') \t Magnitude Contrast \t Error\n')
-#for i in range(len(radii)):
-#            fout.write('{0: 3.3f} \t {1: 3.3f} \t {2: 3.3f} \n'.format(radii[i],\
-#                                                    contrast[i],contrast_err[i]))
-#fout.close()
+fout = open(out_dir+'/contrast_curve_'+filename+'.dat','w')
+fout.write('# Radius ('') \t Magnitude Contrast \t Error\n')
+for i in range(len(radii)):
+            fout.write('{0: 3.3f} \t {1: 3.3f} \t {2: 3.3f} \n'.format(radii[i],\
+                                                    contrast[i],contrast_err[i]))
+fout.close()
 
 # Plot final results to the user
 import matplotlib.pyplot as plt

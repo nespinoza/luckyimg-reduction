@@ -26,6 +26,9 @@ The steps are:
     5. For each radius, average all the contrasts in the angles. This 
        defines our contrast curve.
 
+The radii at which the contrast curve is sampled are the N x mean of the dispersions 
+estimated in the two directions using the assymetric gaussians (i.e., (sigma_x+sigma_y)/2).
+
 The code performs the modelling, and generates the contrast curves at 
 the end. So far, it supports lucky imaging observations done with AstraLux Sur, 
 but it should be easy to port it to other instruments.
