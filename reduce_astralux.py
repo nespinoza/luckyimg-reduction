@@ -8,7 +8,7 @@ import Utils
 #################### USER DEFINITIONS #######################
 
 data_folder = '/Volumes/SeagateEHD/data/AstraLux/22122015/'
-filename = 'TDRIZZLE_0010_006_HATS754005_SDSSz__000'
+filename = 'TDRIZZLE_0010_029_HATS606007_SDSSz__000'
 # Minimum magnitude contrast to be explored:
 min_m = 0
 # Maximum magnitude contrast to be explored:
@@ -71,11 +71,24 @@ else:
     par.close()
 
 # Define the step in radius at which we will calculate the contrasts. This is 
-# the geometric mean of sigma_x and sigma_y. The aperture radius and the box 
-# at which we estimate the noise at each radius is half this value:
-sigma = (out_params['sigma_x'].value+out_params['sigma_y'].value)/2.
-radii_step = sigma
-N = int(radii_step/2.)
+# calculated in terms of the "effective FWHM", which we calculate numerically from 
+# the model PSF, by trying different radii and angles and finding the positions at which 
+# the flux is half the peak flux.
+max_flux_model = np.max(model) 
+radii = np.linspace(0,5.*((out_params['sigma_x'].value+out_params['sigma_y'].value)/2.),100)
+thetas = np.linspace(0,2*np.pi,100)
+fwhms = np.zeros(len(thetas))
+for j in range(len(thetas)):
+    for i in range(len(radii)):
+        c_x = out_params['x0'].value + radii[i]*np.cos(thetas[j])
+        c_y = out_params['y0'].value + radii[i]*np.sin(thetas[j])
+        if model[int(c_y),int(c_x)]<max_flux_model/2.:
+           fwhms[j] = np.sqrt((out_params['x0'].value-int(c_x))**2 + (out_params['y0'].value-int(c_y))**2)
+           break
+
+print '\t Effective FWHM:',np.median(fwhms),'+-',np.sqrt(np.var(fwhms)),' pix (',np.median(fwhms)*scale,'+-',np.sqrt(np.var(fwhms))*scale,' arcsecs)'
+radii_step = np.median(fwhms)
+N = np.median(fwhms)
 
 # Convert the radius step to int:
 radii_step = int(radii_step)
@@ -100,12 +113,6 @@ max_radius = np.min([right_dist,left_dist,up_dist,down_dist])
 # we detect the injected signal at 5-sigma). A detection is defined if 
 # more than 5 pixels are above the 5-sigma noise level of this residual 
 # image at that position.
-
-print '\t > Important parameters derived:'
-print '\t'
-print '\t sigma_x (arcsec):',out_params['sigma_x'].value*scale,'(',out_params['sigma_x'].value,'pixels)'
-print '\t sigma_y (arcsec):',out_params['sigma_y'].value*scale,'(',out_params['sigma_y'].value,'pixels)'
-print '\t Step radius (arcsec):',radii_step*scale,'(',radii_step,' pixels)'
 
 # First, define the radii that will be explored:
 radii = np.arange(radii_step,max_radius,radii_step)
