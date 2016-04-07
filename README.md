@@ -42,4 +42,3 @@ The code relies on the following open source libraries:
     - Scipy
     - Matplotlib
     - lmfit (https://lmfit.github.io/lmfit-py/)
-    - photutils (https://photutils.readthedocs.org/en/latest/)

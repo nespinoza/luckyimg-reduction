@@ -114,13 +114,6 @@ def fitPSF(d,x0,y0,sigma,A):
     prms.add('beta', value = 1., min = 0, max = 10.)
     prms.add('bkg', value = np.median(d), min = np.median(d)-10*get_sigma_mad(d), \
                     max = np.median(d)+10*get_sigma_mad(d), vary = True)
-    prms.add('theta', value = np.pi/4., min = 0, max = np.pi/2.)
+    prms.add('theta', value = np.pi/4., min = 0, max = np.pi)
     result = lmfit.minimize(residuals, prms)
     return result.params
-
-from photutils import CircularAperture,CircularAnnulus,aperture_photometry
-def getApertureFluxes(subimg,x_cen,y_cen,Radius,sky_sigma,GAIN):
-    apertures = CircularAperture([(x_cen,y_cen)],r=Radius)
-    rawflux_table = aperture_photometry(subimg, apertures, \
-            error=sky_sigma, effective_gain = GAIN)
-    return rawflux_table['aperture_sum'][0],rawflux_table['aperture_sum_err'][0]    
