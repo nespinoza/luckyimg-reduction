@@ -1,8 +1,8 @@
 # luckyimg-reduction
 
-Lucky Imaging Reduction (contrast curve generator)
+CCG (contrast curve generator)
 --------------------------------------------------
-This code takes lucky imaging observations and generates 
+This code takes archival/lucky imaging observations and generates 
 contrast curves around the brightest star on the image 
 (useful for exoplanet studies).
 
